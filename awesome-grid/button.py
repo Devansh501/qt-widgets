@@ -1,15 +1,9 @@
 from PyQt5.QtWidgets import QPushButton
-from PyQt5.QtCore import QSize, Qt
-from PyQt5.QtGui import QPainter, QColor, QFont, QFontMetrics, QLinearGradient, QPen
+from PyQt5.QtCore import QSize, Qt, QEvent
+from PyQt5.QtGui import QPainter, QColor, QFontMetrics, QLinearGradient, QPen
 
 
 class ThemedButton(QPushButton):
-    """
-    A reusable, theme-aware button
-    with support for custom colors and sizes (large, medium, small),
-    rendered manually with paintEvent for smoothness and effects.
-    """
-
     SIZE_MAP = {
         "large": QSize(160, 48),
         "medium": QSize(120, 36),
@@ -39,7 +33,6 @@ class ThemedButton(QPushButton):
     ):
         super().__init__(text, parent)
 
-        # Determine size
         if isinstance(size, QSize):
             self.setFixedSize(size)
         elif size in self.SIZE_MAP:
@@ -47,7 +40,6 @@ class ThemedButton(QPushButton):
         else:
             self.setFixedSize(self.SIZE_MAP["medium"])
 
-        # Determine colors
         self.colors = self.DEFAULT_COLORS.copy()
         if primary_color:
             self.colors["primary"] = primary_color
@@ -64,6 +56,7 @@ class ThemedButton(QPushButton):
         self.setFlat(True)
         self.setStyleSheet("background: transparent;")
         self.setMouseTracking(True)
+        self.setAttribute(Qt.WA_AcceptTouchEvents, True)
 
         self.hovered = False
         self.pressed_in = False
@@ -87,17 +80,39 @@ class ThemedButton(QPushButton):
         self.update()
         super().mouseReleaseEvent(event)
 
+    def event(self, e):
+        if e.type() == QEvent.TouchBegin:
+            e.accept()
+            self.pressed_in = True
+            self.hovered = True
+            self.update()
+            return True
+
+        elif e.type() == QEvent.TouchUpdate:
+            e.accept()
+            # (optional: you could track position here if needed)
+            return True
+
+        elif e.type() == QEvent.TouchEnd:
+            e.accept()
+            self.pressed_in = False
+            self.hovered = False
+            self.update()
+            # emit clicked() since QPushButton might not do it without mouse
+            self.clicked.emit()
+            return True
+
+        return super().event(e)
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
         rect = self.rect().adjusted(2, 2, -2, -2)
 
-        # adjust if pressed
         if self.pressed_in:
             rect = rect.adjusted(2, 2, -2, -2)
 
-        # pick color
         if not self.isEnabled():
             bg_color = QColor(self.colors["disabled_bg"])
             text_color = QColor(self.colors["disabled_text"])
@@ -114,7 +129,6 @@ class ThemedButton(QPushButton):
         border_color = QColor(self.colors["border"])
         radius = min(self.width(), self.height()) * 0.15
 
-        # gradient for depth
         grad = QLinearGradient(rect.topLeft(), rect.bottomLeft())
         grad.setColorAt(0, bg_color.lighter(120))
         grad.setColorAt(1, bg_color.darker(110))
@@ -123,13 +137,11 @@ class ThemedButton(QPushButton):
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(rect, radius, radius)
 
-        # border
         pen = QPen(border_color)
         pen.setWidth(1)
         painter.setPen(pen)
         painter.drawRoundedRect(rect, radius, radius)
 
-        # text
         font = self.font()
         fm = QFontMetrics(font)
         text = self.text()

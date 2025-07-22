@@ -6,7 +6,7 @@ from PyQt5.QtGui import QPainter, QColor, QPen
 
 
 class DynamicButton(QAbstractButton):
-    def __init__(self, parent=None, diameter=None):
+    def __init__(self,x,y,onCheck,onUncheck, parent=None, diameter=None):
         super().__init__(parent)
 
         self.setCheckable(True)
@@ -14,6 +14,10 @@ class DynamicButton(QAbstractButton):
 
         self.hovered = False
         self.diameter = diameter
+        self.x = x
+        self.y = y
+        self.onCheck = onCheck
+        self.onUncheck = onUncheck
 
         # Colors
         self.border_color = QColor("#222")
@@ -67,34 +71,6 @@ class DynamicButton(QAbstractButton):
 
     def on_toggled(self, checked):
         if checked:
-            print(f"[DynamicButton] ✅ Checked at {self}")
+            self.onCheck(self)
         else:
-            print(f"[DynamicButton] ❌ Unchecked at {self}")
-
-
-class ButtonGridWidget(QWidget):
-    def __init__(self, rows=3, cols=3, parent=None):
-        super().__init__(parent)
-
-        self.rows = rows
-        self.cols = cols
-
-        self.grid_layout = QGridLayout()
-        self.grid_layout.setSpacing(20)
-        self.grid_layout.setContentsMargins(20, 20, 20, 20)
-
-        self.buttons = []  # keep references if needed
-
-        for row in range(rows):
-            row_buttons = []
-            for col in range(cols):
-                btn = DynamicButton()
-                self.grid_layout.addWidget(btn, row, col)
-                row_buttons.append(btn)
-            self.buttons.append(row_buttons)
-
-        self.setLayout(self.grid_layout)
-
-    def get_buttons(self):
-        """Optional: return 2D list of buttons."""
-        return self.buttons
+            self.onUncheck(self)
