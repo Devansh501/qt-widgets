@@ -16,7 +16,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout()
         button = ThemedButton("Click Me")
         grid = ButtonGridWidget(4,5)
-        selector = ThemedSelector(size="large")
+        selector = ThemedSelector(size="medium")
         selector.addItem("Option 1", userData=101)
         selector.addItem("Option 2", userData=202)
         selector.addItem("Option 3", userData=303)
