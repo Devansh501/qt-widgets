@@ -14,6 +14,11 @@ class VirtualKeyboard(QWidget):
     we have assigned other themes to one style, we can customise for more schemas.
     """
 
+    # Remaining Improvements:
+    # Widget in the middle of the screen rather than at the bottom
+    # Multi focus not working for multiple LineEdits
+
+    
     def __init__(self, target_input, app, theme="dark"):
         super().__init__()
         self.target_input = target_input
@@ -21,8 +26,14 @@ class VirtualKeyboard(QWidget):
         self.caps = False
         self.theme = theme
 
+        # For Windows
+        # self.setWindowFlags(
+        #     Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Popup
+        # )
+        
+        # For Linux
         self.setWindowFlags(
-            Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Popup
+            Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Tool
         )
 
         self.screen_geom = self.app.primaryScreen().availableGeometry()
