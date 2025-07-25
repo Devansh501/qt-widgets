@@ -20,12 +20,16 @@ class MainWindow(QMainWindow):
         selector.addItem("Option 1", userData=101)
         selector.addItem("Option 2", userData=202)
         selector.addItem("Option 3", userData=303)
+        selector.currentIndexChanged.connect(lambda: self.test(selector))
         
         layout.addWidget(grid)
         layout.addWidget(button)
         layout.addWidget(selector)
         
         central_widget.setLayout(layout)
+    
+    def test(self,selector):
+        print(selector.currentData())
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

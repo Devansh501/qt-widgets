@@ -20,16 +20,19 @@ class MainApp(QMainWindow):
         layout.addWidget(label)
 
         self.text_input = QLineEdit(self)
+        self.dummy_input = QLineEdit(self)
         layout.addWidget(self.text_input)
+        layout.addWidget(self.dummy_input)
 
-        # Override mousePressEvent to show keyboard when clicked
-        self.text_input.mousePressEvent = self.show_virtual_keyboard
+        # Assign per-widget mouse event handlers
+        self.text_input.mousePressEvent = self.get_virtual_keyboard_callback(self.text_input)
+        self.dummy_input.mousePressEvent = self.get_virtual_keyboard_callback(self.dummy_input)
 
-    def show_virtual_keyboard(self, event):
-        # Show the virtual keyboard on click
-        VirtualKeyboard.show_for(self.text_input,theme="dev")
-        # Still call original event
-        QLineEdit.mousePressEvent(self.text_input, event)
+    def get_virtual_keyboard_callback(self, target_input):
+        def callback(event):
+            VirtualKeyboard.show_for(target_input)
+            QLineEdit.mousePressEvent(target_input, event)
+        return callback
 
 
 def main():

@@ -3,12 +3,11 @@ from PyQt5.QtCore import (
     Qt, QSize, QEvent, QPropertyAnimation, pyqtSignal, QStringListModel, QRectF, pyqtProperty
 )
 from PyQt5.QtGui import (
-    QPainter, QColor, QLinearGradient, QPen, QPainterPath
+    QPainter, QColor, QLinearGradient, QPen, QPainterPath, QMouseEvent, QTouchEvent
 )
 
 
 class ThemedItemDelegate(QStyledItemDelegate):
-   
     def __init__(self, parent=None, divider_color=QColor(255, 255, 255, 30)):
         super().__init__(parent)
         self.divider_color = divider_color
@@ -231,33 +230,94 @@ class ThemedSelector(QWidget):
             QApplication.instance().installEventFilter(self)
             self.popup_open = True
 
+    # def eventFilter(self, obj, e):
+    #     if self.view is None or not self.view:  # self.view has been deleted
+    #         return False
+    #     if obj == self.view.viewport() and e.type() == QEvent.Paint:
+    #         painter = QPainter(self.view.viewport())
+    #         painter.setRenderHint(QPainter.Antialiasing)
+
+    #         rect = self.view.viewport().rect().adjusted(0, 0, -1, -1)
+    #         path = QPainterPath()
+    #         path.addRoundedRect(QRectF(rect), self.radius, self.radius)
+    #         painter.setClipPath(path)
+
+    #         bg_color = QColor(self.colors["primary"])
+    #         border_color = QColor(self.colors["border"])
+
+    #         grad = QLinearGradient(rect.topLeft(), rect.bottomLeft())
+    #         grad.setColorAt(0, bg_color.lighter(130))
+    #         grad.setColorAt(1, bg_color.darker(110))
+
+    #         painter.fillPath(path, grad)
+
+    #         pen = QPen(border_color)
+    #         pen.setWidth(1)
+    #         painter.setPen(pen)
+    #         painter.drawPath(path)
+
+    #     if self.popup_open:
+    #         if e.type() in (QEvent.MouseButtonPress, QEvent.TouchBegin):
+    #             pos = None
+    #             if isinstance(e, QMouseEvent):
+    #                 pos = e.globalPos()
+    #             elif isinstance(e, QTouchEvent):
+    #                 touch_points = e.touchPoints()
+    #                 if touch_points:
+    #                     pos = touch_points[0].screenPos().toPoint()
+
+    #             if pos and obj not in (self.view, self.view.viewport()) and not self.view.geometry().contains(pos):
+    #                 self.view.hide()
+    #                 QApplication.instance().removeEventFilter(self)
+    #                 self.popup_open = False
+
+    #         if obj == self.view and e.type() in (QEvent.FocusOut, QEvent.WindowDeactivate):
+    #             self.view.hide()
+    #             QApplication.instance().removeEventFilter(self)
+    #             self.popup_open = False
+
+    #     return super().eventFilter(obj, e)
+
     def eventFilter(self, obj, e):
-        if obj == self.view.viewport() and e.type() == QEvent.Paint:
-            painter = QPainter(self.view.viewport())
-            painter.setRenderHint(QPainter.Antialiasing)
+        try:
+            if self.view and obj == self.view.viewport() and e.type() == QEvent.Paint:
+                painter = QPainter(self.view.viewport())
+                painter.setRenderHint(QPainter.Antialiasing)
 
-            rect = self.view.viewport().rect().adjusted(0, 0, -1, -1)
-            path = QPainterPath()
-            path.addRoundedRect(QRectF(rect), self.radius, self.radius)
-            painter.setClipPath(path)
+                rect = self.view.viewport().rect().adjusted(0, 0, -1, -1)
+                path = QPainterPath()
+                path.addRoundedRect(QRectF(rect), self.radius, self.radius)
+                painter.setClipPath(path)
 
-            bg_color = QColor(self.colors["primary"])
-            border_color = QColor(self.colors["border"])
+                bg_color = QColor(self.colors["primary"])
+                border_color = QColor(self.colors["border"])
 
-            grad = QLinearGradient(rect.topLeft(), rect.bottomLeft())
-            grad.setColorAt(0, bg_color.lighter(130))
-            grad.setColorAt(1, bg_color.darker(110))
+                grad = QLinearGradient(rect.topLeft(), rect.bottomLeft())
+                grad.setColorAt(0, bg_color.lighter(130))
+                grad.setColorAt(1, bg_color.darker(110))
 
-            painter.fillPath(path, grad)
+                painter.fillPath(path, grad)
 
-            pen = QPen(border_color)
-            pen.setWidth(1)
-            painter.setPen(pen)
-            painter.drawPath(path)
+                pen = QPen(border_color)
+                pen.setWidth(1)
+                painter.setPen(pen)
+                painter.drawPath(path)
+        except RuntimeError:
+            # view or viewport was deleted — safely ignore
+            return False
 
+        # Handle hiding the popup safely
         if self.popup_open:
             if e.type() in (QEvent.MouseButtonPress, QEvent.TouchBegin):
-                if obj not in (self.view, self.view.viewport()) and not self.view.geometry().contains(e.globalPos()):
+                pos = None
+                if isinstance(e, QMouseEvent):
+                    pos = e.globalPos()
+                elif isinstance(e, QTouchEvent):
+                    touch_points = e.touchPoints()
+                    if touch_points:
+                        pos = touch_points[0].screenPos().toPoint()
+
+                if pos and obj not in (self.view, self.view.viewport()) and not self.view.geometry().contains(pos):
                     self.view.hide()
                     QApplication.instance().removeEventFilter(self)
                     self.popup_open = False

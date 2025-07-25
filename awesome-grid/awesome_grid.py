@@ -100,9 +100,11 @@ class ButtonGridWidget(QWidget):
         elif e.type() == QEvent.TouchEnd:
             e.accept()
             end_pos = e.touchPoints()[0].pos().toPoint()
-            # if not self.dragging:
-            #     print("Single Tap")
-            #     # self.toggle_button_at(end_pos)
+            # For Linux
+            if not self.dragging:
+                print("Single Tap")
+                self.toggle_button_at(end_pos)
+            # For Windows Comment out
             self.dragging = False
             self.toggled_buttons.clear()
             self.touch_start_pos = None

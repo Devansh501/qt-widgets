@@ -1,40 +1,29 @@
 from PyQt5.QtWidgets import (
-    QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QSizePolicy
+    QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QSizePolicy,QApplication
 )
 from PyQt5.QtCore import Qt, QRect, QPropertyAnimation
 from PyQt5.QtGui import QFont
 
 
 class VirtualKeyboard(QWidget):
-    """
-    VirtualKeyboard(target_input, app, theme="dark")
-    
-    We can also use:
-    VirtualKeyboard.show_for(target_input, theme="anything")
-    we have assigned other themes to one style, we can customise for more schemas.
-    """
+    _instance = None  # Singleton instance
 
-    # Remaining Improvements:
-    # Widget in the middle of the screen rather than at the bottom
-    # Multi focus not working for multiple LineEdits
-
-    
     def __init__(self, target_input, app, theme="dark"):
         super().__init__()
+        QApplication.instance().focusChanged.connect(self.on_focus_changed)
         self.target_input = target_input
         self.app = app
         self.caps = False
         self.theme = theme
 
-        # For Windows
-        # self.setWindowFlags(
-        #     Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Popup
-        # )
-        
-        # For Linux
-        self.setWindowFlags(
-            Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Tool
-        )
+        # Drag/touch state
+        self._drag_active = False
+        self._drag_offset = None
+        self._suppress_focus_close = False
+        self.setAttribute(Qt.WA_AcceptTouchEvents, True)  # Enable touch events
+
+        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.Tool)
+        self.setWindowTitle("Keyboard")
 
         self.screen_geom = self.app.primaryScreen().availableGeometry()
         self.screen_width = self.screen_geom.width()
@@ -43,7 +32,7 @@ class VirtualKeyboard(QWidget):
         self.is_small_screen = self.screen_width <= 1280
 
         if self.is_small_screen:
-            self.kb_width = self.screen_width
+            self.kb_width = min(self.screen_width, int(self.screen_width * 0.95))
             self.kb_height = int(self.screen_height * 0.4)
             self.font_size = max(14, int(self.screen_height * 0.03))
         else:
@@ -55,13 +44,59 @@ class VirtualKeyboard(QWidget):
         self.position_keyboard()
         self.apply_theme()
         self.fade_in()
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._drag_active = True
+            self._drag_offset = event.globalPos() - self.frameGeometry().topLeft()
+            self._suppress_focus_close = True
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._drag_active and event.buttons() & Qt.LeftButton:
+            new_pos = event.globalPos() - self._drag_offset
+            self.move(new_pos)
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._drag_active = False
+            self._suppress_focus_close = False
+            event.accept()
+        else:
+            super().mouseReleaseEvent(event)
+
+    def event(self, event):
+        # Handle touch events for dragging
+        if event.type() == event.TouchBegin:
+            self._drag_active = True
+            touch_point = event.touchPoints()[0]
+            self._drag_offset = touch_point.screenPos().toPoint() - self.frameGeometry().topLeft()
+            self._suppress_focus_close = True
+            event.accept()
+            return True
+        elif event.type() == event.TouchUpdate and self._drag_active:
+            touch_point = event.touchPoints()[0]
+            new_pos = touch_point.screenPos().toPoint() - self._drag_offset
+            self.move(new_pos)
+            event.accept()
+            return True
+        elif event.type() == event.TouchEnd:
+            self._drag_active = False
+            self._suppress_focus_close = False
+            event.accept()
+            return True
+        return super().event(event)
 
     def init_ui(self):
         self.keys_layout = [
             ['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'Backspace'],
             ['Tab', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\\'],
             ['Caps', 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', 'Enter'],
-            ['z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/'],
+            ['_','z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/'],
             ['*', '&', '!', '@', 'Space', '$', '%', '(', ')']
         ]
 
@@ -90,7 +125,7 @@ class VirtualKeyboard(QWidget):
 
                 if key == 'Space':
                     hbox.setStretchFactor(btn, int(4 * multiplier))
-                elif key in ['Backspace', 'Enter', 'Caps', '_']:
+                elif key in ['Backspace', 'Enter', 'Caps', 'Tab']:
                     hbox.setStretchFactor(btn, int(2 * multiplier))
                 else:
                     hbox.setStretchFactor(btn, int(1 * multiplier))
@@ -162,22 +197,20 @@ class VirtualKeyboard(QWidget):
             self.fade_out()
         elif key == "Space":
             self.target_input.insert(" ")
-        elif key == "_":
-            self.target_input.insert("_")
+        elif key == "Tab":
+            self.target_input.insert("  ")
         elif key == "Caps":
             self.caps = not self.caps
             self.update_keys_case()
         else:
             to_insert = key
             if len(key) == 1:
-                if self.caps:
-                    to_insert = key.upper()
-                else:
-                    to_insert = key.lower()
+                to_insert = key.upper() if self.caps else key.lower()
             self.target_input.insert(to_insert)
-        
 
     def fade_in(self):
+        if self.isVisible():
+            return
         self.setWindowOpacity(0)
         self.show()
         self.animation = QPropertyAnimation(self, b"windowOpacity")
@@ -194,12 +227,27 @@ class VirtualKeyboard(QWidget):
         self.animation.finished.connect(self.close)
         self.animation.start()
 
+    def on_focus_changed(self, old, new):
+        # If new widget is NOT a child of this keyboard window
+        if self._suppress_focus_close:
+            return  # Don't close while dragging/touching
+        if new is None or not self.isAncestorOf(new):
+            print("Focus left the keyboard")
+            self.fade_out()
+
+    
+
     @staticmethod
     def show_for(target_input, theme="dark"):
         from PyQt5.QtWidgets import QApplication
         app = QApplication.instance()
-        vk = VirtualKeyboard(target_input, app, theme)
-        target_input._vk_instance = vk 
 
+        if VirtualKeyboard._instance is None:
+            vk = VirtualKeyboard(target_input, app, theme)
+            VirtualKeyboard._instance = vk
+        else:
+            vk = VirtualKeyboard._instance
+            vk.target_input = target_input
+            
 
-
+        vk.fade_in()
