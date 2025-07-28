@@ -16,12 +16,6 @@ class VirtualKeyboard(QWidget):
         self.caps = False
         self.theme = theme
 
-        # Drag/touch state
-        self._drag_active = False
-        self._drag_offset = None
-        self._suppress_focus_close = False
-        self.setAttribute(Qt.WA_AcceptTouchEvents, True)  # Enable touch events
-
         self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setWindowTitle("Keyboard")
 
@@ -44,52 +38,6 @@ class VirtualKeyboard(QWidget):
         self.position_keyboard()
         self.apply_theme()
         self.fade_in()
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self._drag_active = True
-            self._drag_offset = event.globalPos() - self.frameGeometry().topLeft()
-            self._suppress_focus_close = True
-            event.accept()
-        else:
-            super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        if self._drag_active and event.buttons() & Qt.LeftButton:
-            new_pos = event.globalPos() - self._drag_offset
-            self.move(new_pos)
-            event.accept()
-        else:
-            super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self._drag_active = False
-            self._suppress_focus_close = False
-            event.accept()
-        else:
-            super().mouseReleaseEvent(event)
-
-    def event(self, event):
-        # Handle touch events for dragging
-        if event.type() == event.TouchBegin:
-            self._drag_active = True
-            touch_point = event.touchPoints()[0]
-            self._drag_offset = touch_point.screenPos().toPoint() - self.frameGeometry().topLeft()
-            self._suppress_focus_close = True
-            event.accept()
-            return True
-        elif event.type() == event.TouchUpdate and self._drag_active:
-            touch_point = event.touchPoints()[0]
-            new_pos = touch_point.screenPos().toPoint() - self._drag_offset
-            self.move(new_pos)
-            event.accept()
-            return True
-        elif event.type() == event.TouchEnd:
-            self._drag_active = False
-            self._suppress_focus_close = False
-            event.accept()
-            return True
-        return super().event(event)
 
     def init_ui(self):
         self.keys_layout = [
@@ -229,8 +177,6 @@ class VirtualKeyboard(QWidget):
 
     def on_focus_changed(self, old, new):
         # If new widget is NOT a child of this keyboard window
-        if self._suppress_focus_close:
-            return  # Don't close while dragging/touching
         if new is None or not self.isAncestorOf(new):
             print("Focus left the keyboard")
             self.fade_out()

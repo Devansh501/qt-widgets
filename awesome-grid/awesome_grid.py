@@ -1,24 +1,71 @@
-from PyQt5.QtWidgets import QWidget, QGridLayout, QGraphicsDropShadowEffect
+from PyQt5.QtWidgets import QWidget, QGridLayout, QGraphicsDropShadowEffect,QLabel,QSizePolicy
 from PyQt5.QtCore import Qt, QRectF, QEvent
 from PyQt5.QtGui import QColor, QPainter, QPen, QLinearGradient, QPainterPath
-from dynamic_button import DynamicButton
+from widgets.dynamic_button import DynamicButton
 
 
 class ButtonGridWidget(QWidget):
     def __init__(self, rows, cols):
         super().__init__()
 
+        self.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
+
         self.layout = QGridLayout(self)
-        self.layout.setSpacing(5)
+        self.layout.setSpacing(3)  # Set your minimum gap here (in pixels)
         self.layout.setContentsMargins(15, 15, 15, 15)
         self.selected_buttons = set()
+
+        # Add column labels (1, 2, 3, ...) with compact style and fixed height
+        LABEL_SIZE = 32
+        BUTTON_SIZE = 32
+        for col in range(cols):
+            label = QLabel(str(col + 1))
+            label.setAlignment(Qt.AlignCenter)
+            label.setStyleSheet("""
+                QLabel {
+                    font-weight: bold;
+                    font-size: 13px;
+                    color: #1a4d7a;
+                    background: transparent; /* Changed to transparent for better visibility */
+                    border-radius: 6px;
+                    padding: 0px;
+                    margin: 0px;
+                }
+            """)
+            label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            label.setFixedWidth(LABEL_SIZE)
+            label.setFixedHeight(LABEL_SIZE)
+            self.layout.addWidget(label, 0, col + 1)
+
+        # Add row labels (A, B, C, ...) with compact style and fixed height
+        for row in range(rows):
+            label = QLabel(chr(65 + row))  # 65 is 'A'
+            label.setAlignment(Qt.AlignCenter)
+            label.setStyleSheet("""
+                QLabel {
+                    font-weight: bold;
+                    font-size: 13px;
+                    color: #1a4d7a;
+                    background: transparent; /* Changed to transparent for better visibility */
+                    border-radius: 6px;
+                    padding: 0px;
+                    margin: 0px;
+                }
+            """)
+            label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            label.setFixedWidth(LABEL_SIZE)
+            label.setFixedHeight(LABEL_SIZE)
+            self.layout.addWidget(label, row + 1, 0)
 
         self.buttons = []
         for i in range(rows):
             row_buttons = []
             for j in range(cols):
-                btn = DynamicButton(i+1,j+1,self.onChecked, self.onUnchecked)
-                self.layout.addWidget(btn, i, j)
+                btn = DynamicButton(i + 1, j + 1, self.onChecked, self.onUnchecked)
+                btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+                btn.setFixedWidth(BUTTON_SIZE)
+                btn.setFixedHeight(BUTTON_SIZE)
+                self.layout.addWidget(btn, i + 1, j + 1)
                 row_buttons.append(btn)
             self.buttons.append(row_buttons)
 
@@ -33,7 +80,7 @@ class ButtonGridWidget(QWidget):
         self.tap_threshold = 10  # pixels
 
         # design elements
-        self.setMinimumSize(300, 300)
+        # self.setMinimumSize(300, 300)
 
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(15)
@@ -69,7 +116,7 @@ class ButtonGridWidget(QWidget):
     def mousePressEvent(self, event):
         self.dragging = True
         self.toggled_buttons.clear()
-        self.toggle_button_at(event.pos())
+        self.toggle_button_at(event.pos()).set
 
     def mouseMoveEvent(self, event):
         if self.dragging:

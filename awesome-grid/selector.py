@@ -1,127 +1,83 @@
-from PyQt5.QtWidgets import QWidget, QListView, QStyledItemDelegate, QApplication
+from PyQt5.QtWidgets import (
+    QWidget, QDialog, QVBoxLayout, QListWidget, QListWidgetItem,
+    QGraphicsDropShadowEffect
+)
 from PyQt5.QtCore import (
-    Qt, QSize, QEvent, QPropertyAnimation, pyqtSignal, QStringListModel, QRectF, pyqtProperty
+    pyqtSignal, Qt, QSize, QPoint, QTimer, QPointF, QEvent, QRectF
 )
 from PyQt5.QtGui import (
-    QPainter, QColor, QLinearGradient, QPen, QPainterPath, QMouseEvent, QTouchEvent
+    QFont, QColor, QPainter, QBrush, QPen, QLinearGradient, QFontMetrics, QPainterPath, QRegion
 )
 
 
-class ThemedItemDelegate(QStyledItemDelegate):
-    def __init__(self, parent=None, divider_color=QColor(255, 255, 255, 30)):
+class RippleOverlay(QWidget):
+    def __init__(self, parent):
         super().__init__(parent)
-        self.divider_color = divider_color
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.radius = 0
+        self.alpha = 150
+        self.center = QPointF()
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.animate)
+        self.hide()
 
-    def paint(self, painter, option, index):
-        super().paint(painter, option, index)
+    def start(self, center):
+        self.radius = 0
+        self.alpha = 150
+        self.center = QPointF(center)
+        self.show()
+        self.timer.start(16)
 
-        if index.row() < index.model().rowCount() - 1:
-            painter.save()
-            pen = QPen(self.divider_color)
-            pen.setWidth(1)
-            painter.setPen(pen)
-            y = option.rect.bottom()
-            painter.drawLine(option.rect.left(), y, option.rect.right(), y)
-            painter.restore()
+    def animate(self):
+        self.radius += 6
+        self.alpha -= 5
+        if self.alpha <= 0:
+            self.timer.stop()
+            self.hide()
+        self.update()
+
+    def paintEvent(self, event):
+        if self.alpha <= 0:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        color = QColor(255, 255, 255, self.alpha)
+        painter.setBrush(QBrush(color))
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(self.center, self.radius, self.radius)
 
 
-class ThemedSelector(QWidget):
-    SIZE_MAP = {
-        "large": QSize(160, 48),
-        "medium": QSize(120, 36),
-        "small": QSize(90, 28)
-    }
-
-    FONT_MAP = {
-        "large": 12,
-        "medium": 10,
-        "small": 8
-    }
-
-    DEFAULT_COLORS = {
-        "primary": "#1a4d7a",
-        "hover": "#246ca3",
-        "pressed": "#153b60",
-        "border": "#29618f",
-        "disabled_bg": "#2f4f6f",
-        "disabled_text": "#aaaaaa",
-        "text": "#ffffff",
-        "selection": "#246ca3"
-    }
-
-    currentIndexChanged = pyqtSignal(int)
-
-    def __init__(self, parent=None, size="medium"):
+class SelectorButton(QWidget):
+    def __init__(self, text="", size=QSize(120, 36), parent=None):
         super().__init__(parent)
-
+        self.setFixedSize(size)
+        self.text = text
+        self.hovered = False
+        self.pressed_in = False
+        self.popup_open = False
+        self.border_radius = 6
+        self.setAttribute(Qt.WA_AcceptTouchEvents, True)
         self.setMouseTracking(True)
         self.setCursor(Qt.PointingHandCursor)
 
-        if isinstance(size, QSize):
-            self.setFixedSize(size)
-            font_size = 10
-        else:
-            self.setFixedSize(self.SIZE_MAP.get(size, self.SIZE_MAP["medium"]))
-            font_size = self.FONT_MAP.get(size, self.FONT_MAP["medium"])
+    def setText(self, text):
+        self.text = text
+        self.update()
 
-        self.colors = self.DEFAULT_COLORS.copy()
-        self.radius = int(min(self.width(), self.height()) * 0.15)
+    def getText(self):
+        return self.text
 
-        font = self.font()
-        font.setPointSize(font_size)
-        self.setFont(font)
-
-        self.items = []  # (text, userData)
-        self.current_index = -1
-        self.hovered = False
-        self.pressed_in = False
-        self._hover_progress = 0.0
-        self.popup_open = False
-
-        self.hover_anim = QPropertyAnimation(self, b"hoverProgress", self)
-        self.hover_anim.setDuration(200)
-
-        self.view = QListView()
-        self.view.setWindowFlags(Qt.Popup)
-        self.view.setEditTriggers(QListView.NoEditTriggers)
-        self.view.setSelectionMode(QListView.SingleSelection)
-        self.view.setMouseTracking(True)
-        self.view.setFont(font)
-        self.view.setFrameShape(QListView.NoFrame)
-
-        self.model = QStringListModel()
-        self.view.setModel(self.model)
-        self.view.clicked.connect(self.on_item_selected)
-
-        self.view.setStyleSheet(f"""
-        QListView {{
-            background: transparent;
-            outline: none;
-            color: {self.colors["text"]};
-            padding-top: 4px;
-            padding-bottom: 4px;
-        }}
-        QListView::item {{
-            padding: 4px 6px;
-        }}
-        QListView::item:selected {{
-            background: {self.colors["selection"]};
-            color: {self.colors["text"]};
-        }}
-        """)
-
-        self.view.setItemDelegate(ThemedItemDelegate(
-            self.view, divider_color=QColor(255, 255, 255, 30)))
-
-        self.view.installEventFilter(self)
+    def setPopupOpen(self, is_open: bool):
+        self.popup_open = is_open
+        self.update()
 
     def enterEvent(self, event):
         self.hovered = True
-        self.animateHover(True)
+        self.update()
 
     def leaveEvent(self, event):
         self.hovered = False
-        self.animateHover(False)
+        self.update()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -129,25 +85,29 @@ class ThemedSelector(QWidget):
             self.update()
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:
+        if self.pressed_in:
             self.pressed_in = False
-            self.show_popup()
             self.update()
+            self.clicked()
 
-    def animateHover(self, enter):
-        self.hover_anim.stop()
-        self.hover_anim.setStartValue(self._hover_progress)
-        self.hover_anim.setEndValue(1.0 if enter else 0.0)
-        self.hover_anim.start()
+    def event(self, e):
+        if e.type() == QEvent.TouchBegin:
+            e.accept()
+            self.pressed_in = True
+            self.hovered = True
+            self.update()
+            return True
+        elif e.type() == QEvent.TouchEnd:
+            e.accept()
+            self.pressed_in = False
+            self.hovered = False
+            self.update()
+            self.clicked()
+            return True
+        return super().event(e)
 
-    def getHoverProgress(self):
-        return self._hover_progress
-
-    def setHoverProgress(self, value):
-        self._hover_progress = value
-        self.update()
-
-    hoverProgress = pyqtProperty(float, getHoverProgress, setHoverProgress)
+    def clicked(self):
+        self.parent().show_popup()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -157,191 +117,188 @@ class ThemedSelector(QWidget):
         if self.pressed_in:
             rect = rect.adjusted(2, 2, -2, -2)
 
-        if not self.isEnabled():
-            base = QColor(self.colors["disabled_bg"])
-            text_color = QColor(self.colors["disabled_text"])
-        elif self.pressed_in:
-            base = QColor(self.colors["pressed"])
-            text_color = QColor(self.colors["text"])
-        else:
-            base_primary = QColor(self.colors["primary"])
-            hover_color = QColor(self.colors["hover"])
-            base = QColor(
-                int(base_primary.red() + (hover_color.red() - base_primary.red()) * self._hover_progress),
-                int(base_primary.green() + (hover_color.green() - base_primary.green()) * self._hover_progress),
-                int(base_primary.blue() + (hover_color.blue() - base_primary.blue()) * self._hover_progress)
-            )
-            text_color = QColor(self.colors["text"])
+        base = QColor("#1a4d7a")
+        hover = QColor("#246ca3")
+        press = QColor("#153b60")
+        border = QColor("#29618f")
+        text_color = QColor("#ffffff")
 
-        border_color = QColor(self.colors["border"])
+        if not self.isEnabled():
+            bg = QColor("#2f4f6f")
+            text_color = QColor("#aaaaaa")
+        elif self.pressed_in:
+            bg = press
+        elif self.hovered:
+            bg = hover
+        else:
+            bg = base
 
         grad = QLinearGradient(rect.topLeft(), rect.bottomLeft())
-        grad.setColorAt(0, base.lighter(120))
-        grad.setColorAt(1, base.darker(110))
+        grad.setColorAt(0, bg.lighter(120))
+        grad.setColorAt(1, bg.darker(110))
 
-        painter.setBrush(grad)
+        top_radius = self.border_radius
+        bottom_radius = 0 if self.popup_open else self.border_radius
+
+        path = QPainterPath()
+        path.moveTo(rect.left() + top_radius, rect.top())
+        path.lineTo(rect.right() - top_radius, rect.top())
+        path.quadTo(rect.right(), rect.top(), rect.right(), rect.top() + top_radius)
+        path.lineTo(rect.right(), rect.bottom() - bottom_radius)
+        path.quadTo(rect.right(), rect.bottom(), rect.right() - bottom_radius, rect.bottom())
+        path.lineTo(rect.left() + bottom_radius, rect.bottom())
+        path.quadTo(rect.left(), rect.bottom(), rect.left(), rect.bottom() - bottom_radius)
+        path.lineTo(rect.left(), rect.top() + top_radius)
+        path.quadTo(rect.left(), rect.top(), rect.left() + top_radius, rect.top())
+
+        painter.setBrush(Qt.NoBrush)
         painter.setPen(Qt.NoPen)
-        painter.drawRoundedRect(rect, self.radius, self.radius)
+        painter.fillPath(path, grad)
 
-        pen = QPen(border_color)
+        pen = QPen(border)
         pen.setWidth(1)
         painter.setPen(pen)
-        painter.drawRoundedRect(rect, self.radius, self.radius)
+        painter.drawPath(path)
 
-        painter.setPen(text_color)
-        text_rect = rect.adjusted(6, 0, -20, 0)
-        painter.drawText(text_rect, Qt.AlignVCenter | Qt.AlignLeft, self.currentText())
+        font = self.font()
+        fm = QFontMetrics(font)
+        text = self.text or "Select"
+        text_width = fm.horizontalAdvance(text)
+        max_text_width = rect.width() * 0.8
 
-        arrow_x = rect.right() - 15
-        arrow_y = rect.center().y()
-        pen.setWidth(2)
+        while text_width > max_text_width and font.pointSize() > 1:
+            font.setPointSize(font.pointSize() - 1)
+            fm = QFontMetrics(font)
+            text_width = fm.horizontalAdvance(text)
+
+        painter.setFont(font)
         painter.setPen(text_color)
-        painter.drawLine(arrow_x - 5, arrow_y - 3, arrow_x, arrow_y + 3)
-        painter.drawLine(arrow_x, arrow_y + 3, arrow_x + 5, arrow_y - 3)
+        painter.drawText(rect, Qt.AlignCenter, text)
+
+
+class ThemedSelector(QWidget):
+    currentIndexChanged = pyqtSignal(int)
+
+    def __init__(self, parent=None, size="medium"):
+        super().__init__(parent)
+
+        self.items = []
+        self.current_index = -1
+        self.popup = None
+
+        size_map = {
+            "small": QSize(90, 28),
+            "medium": QSize(120, 36),
+            "large": QSize(160, 48)
+        }
+
+        self.button = SelectorButton("Select", size=size_map.get(size, size_map["medium"]), parent=self)
+        self.setFixedSize(self.button.size())
+
+        font = QFont()
+        font.setPointSize(12 if size == "large" else 10 if size == "medium" else 9)
+        self.button.setFont(font)
+
+        self.ripple = RippleOverlay(self.button)
+        self.ripple.resize(self.button.size())
+
+    def apply_rounded_clip(self, widget, radius=6):
+        path = QPainterPath()
+        rect = QRectF(widget.rect())  # ✅ FIXED: convert QRect to QRectF
+        path.addRoundedRect(rect, radius, radius)
+        widget.setMask(QRegion(path.toFillPolygon().toPolygon()))
 
     def show_popup(self):
         if not self.items:
             return
 
-        popup_height = min(200, len(self.items) * self.height())
-        popup_width = self.width()
-        button_pos = self.mapToGlobal(self.rect().bottomLeft())
-        button_top = self.mapToGlobal(self.rect().topLeft())
+        self.popup = QDialog(self, Qt.Popup)
+        layout = QVBoxLayout(self.popup)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        screen = QApplication.screenAt(button_pos) or QApplication.primaryScreen()
-        screen_geom = screen.availableGeometry()
+        list_widget = QListWidget()
+        list_widget.setFocusPolicy(Qt.NoFocus)
+        list_widget.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        list_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        list_widget.setSpacing(0)
+        list_widget.setContentsMargins(0, 0, 0, 0)
 
-        space_below = screen_geom.bottom() - button_pos.y()
-        space_above = button_top.y() - screen_geom.top()
+        list_widget.setStyleSheet("""
+            QListWidget {
+                background-color: #1a4d7a;
+                border: 1px solid #2c5d8f;
+                color: white;
+                outline: none;
+                padding: 0px;
+                border-top-left-radius: 0px;
+                border-top-right-radius: 0px;
+                border-bottom-left-radius: 6px;
+                border-bottom-right-radius: 6px;
+            }
+            QListWidget::item {
+                padding: 10px 14px;
+            }
+            QListWidget::item:selected {
+                background-color: #246ca3;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: transparent;
+                width: 8px;
+                margin: 4px 2px 4px 0;
+            }
+            QScrollBar::handle:vertical {
+                background: #4e8ecb;
+                min-height: 20px;
+                border-radius: 4px;
+            }
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {
+                height: 0;
+            }
+            QScrollBar::add-page:vertical,
+            QScrollBar::sub-page:vertical {
+                background: none;
+            }
+        """)
 
-        if space_below >= popup_height or space_below >= space_above:
-            pos = button_pos
-        else:
-            pos = button_top
-            pos.setY(pos.y() - popup_height)
+        for i, (text, _) in enumerate(self.items):
+            item = QListWidgetItem(text)
+            item.setSizeHint(QSize(self.width(), self.height()))
+            list_widget.addItem(item)
 
-        self.view.setMinimumWidth(popup_width)
-        self.view.setFixedHeight(popup_height)
-        self.view.move(pos)
-        self.view.show()
-        self.view.setFocus(Qt.PopupFocusReason)
+        list_widget.itemClicked.connect(lambda item: self.select_item(list_widget.row(item)))
+        layout.addWidget(list_widget)
 
-        if not self.popup_open:
-            QApplication.instance().installEventFilter(self)
-            self.popup_open = True
+        shadow = QGraphicsDropShadowEffect(self.popup)
+        shadow.setBlurRadius(40)
+        shadow.setOffset(0, 6)
+        shadow.setColor(QColor(0, 0, 0, 220))
+        self.popup.setGraphicsEffect(shadow)
 
-    # def eventFilter(self, obj, e):
-    #     if self.view is None or not self.view:  # self.view has been deleted
-    #         return False
-    #     if obj == self.view.viewport() and e.type() == QEvent.Paint:
-    #         painter = QPainter(self.view.viewport())
-    #         painter.setRenderHint(QPainter.Antialiasing)
+        self.button.setPopupOpen(True)
 
-    #         rect = self.view.viewport().rect().adjusted(0, 0, -1, -1)
-    #         path = QPainterPath()
-    #         path.addRoundedRect(QRectF(rect), self.radius, self.radius)
-    #         painter.setClipPath(path)
+        item_height = self.height()
+        popup_height = min(6, len(self.items)) * item_height
+        self.popup.setFixedSize(self.width(), popup_height)
 
-    #         bg_color = QColor(self.colors["primary"])
-    #         border_color = QColor(self.colors["border"])
+        button_pos = self.mapToGlobal(QPoint(0, self.height()))
+        self.popup.move(button_pos)
+        self.popup.show()
+        self.popup.finished.connect(lambda: self.button.setPopupOpen(False))
 
-    #         grad = QLinearGradient(rect.topLeft(), rect.bottomLeft())
-    #         grad.setColorAt(0, bg_color.lighter(130))
-    #         grad.setColorAt(1, bg_color.darker(110))
+        self.apply_rounded_clip(list_widget.viewport(), radius=6)
 
-    #         painter.fillPath(path, grad)
+    def select_item(self, index):
+        self.current_index = index
+        self.button.setText(self.items[index][0])
+        if self.popup:
+            self.popup.close()
+        self.currentIndexChanged.emit(index)
 
-    #         pen = QPen(border_color)
-    #         pen.setWidth(1)
-    #         painter.setPen(pen)
-    #         painter.drawPath(path)
-
-    #     if self.popup_open:
-    #         if e.type() in (QEvent.MouseButtonPress, QEvent.TouchBegin):
-    #             pos = None
-    #             if isinstance(e, QMouseEvent):
-    #                 pos = e.globalPos()
-    #             elif isinstance(e, QTouchEvent):
-    #                 touch_points = e.touchPoints()
-    #                 if touch_points:
-    #                     pos = touch_points[0].screenPos().toPoint()
-
-    #             if pos and obj not in (self.view, self.view.viewport()) and not self.view.geometry().contains(pos):
-    #                 self.view.hide()
-    #                 QApplication.instance().removeEventFilter(self)
-    #                 self.popup_open = False
-
-    #         if obj == self.view and e.type() in (QEvent.FocusOut, QEvent.WindowDeactivate):
-    #             self.view.hide()
-    #             QApplication.instance().removeEventFilter(self)
-    #             self.popup_open = False
-
-    #     return super().eventFilter(obj, e)
-
-    def eventFilter(self, obj, e):
-        try:
-            if self.view and obj == self.view.viewport() and e.type() == QEvent.Paint:
-                painter = QPainter(self.view.viewport())
-                painter.setRenderHint(QPainter.Antialiasing)
-
-                rect = self.view.viewport().rect().adjusted(0, 0, -1, -1)
-                path = QPainterPath()
-                path.addRoundedRect(QRectF(rect), self.radius, self.radius)
-                painter.setClipPath(path)
-
-                bg_color = QColor(self.colors["primary"])
-                border_color = QColor(self.colors["border"])
-
-                grad = QLinearGradient(rect.topLeft(), rect.bottomLeft())
-                grad.setColorAt(0, bg_color.lighter(130))
-                grad.setColorAt(1, bg_color.darker(110))
-
-                painter.fillPath(path, grad)
-
-                pen = QPen(border_color)
-                pen.setWidth(1)
-                painter.setPen(pen)
-                painter.drawPath(path)
-        except RuntimeError:
-            # view or viewport was deleted — safely ignore
-            return False
-
-        # Handle hiding the popup safely
-        if self.popup_open:
-            if e.type() in (QEvent.MouseButtonPress, QEvent.TouchBegin):
-                pos = None
-                if isinstance(e, QMouseEvent):
-                    pos = e.globalPos()
-                elif isinstance(e, QTouchEvent):
-                    touch_points = e.touchPoints()
-                    if touch_points:
-                        pos = touch_points[0].screenPos().toPoint()
-
-                if pos and obj not in (self.view, self.view.viewport()) and not self.view.geometry().contains(pos):
-                    self.view.hide()
-                    QApplication.instance().removeEventFilter(self)
-                    self.popup_open = False
-
-            if obj == self.view and e.type() in (QEvent.FocusOut, QEvent.WindowDeactivate):
-                self.view.hide()
-                QApplication.instance().removeEventFilter(self)
-                self.popup_open = False
-
-        return super().eventFilter(obj, e)
-
-    def on_item_selected(self, index):
-        self.current_index = index.row()
-        self.currentIndexChanged.emit(self.current_index)
-        self.view.hide()
-        if self.popup_open:
-            QApplication.instance().removeEventFilter(self)
-            self.popup_open = False
-        self.update()
-
-    # API
     def addItem(self, text, userData=None):
         self.items.append((text, userData))
-        self.model.setStringList([i[0] for i in self.items])
         if self.current_index == -1:
             self.setCurrentIndex(0)
 
@@ -352,6 +309,15 @@ class ThemedSelector(QWidget):
             else:
                 self.addItem(item)
 
+    def setCurrentIndex(self, index):
+        if 0 <= index < len(self.items):
+            self.current_index = index
+            self.button.setText(self.items[index][0])
+            self.currentIndexChanged.emit(index)
+
+    def currentIndex(self):
+        return self.current_index
+
     def currentText(self):
         if 0 <= self.current_index < len(self.items):
             return self.items[self.current_index][0]
@@ -361,11 +327,3 @@ class ThemedSelector(QWidget):
         if 0 <= self.current_index < len(self.items):
             return self.items[self.current_index][1]
         return None
-
-    def setCurrentIndex(self, index):
-        if 0 <= index < len(self.items):
-            self.current_index = index
-            self.update()
-
-    def currentIndex(self):
-        return self.current_index

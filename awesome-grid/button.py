@@ -11,14 +11,15 @@ class ThemedButton(QPushButton):
     }
 
     DEFAULT_COLORS = {
-        "primary": "#1a4d7a",
-        "hover": "#246ca3",
-        "pressed": "#153b60",
-        "border": "#29618f",
-        "disabled_bg": "#2f4f6f",
-        "disabled_text": "#aaaaaa",
-        "text": "#ffffff"
+    "primary": "#1e5d91",      # A step lighter than the background
+    "hover": "#257bbf",        # A brighter hover blue
+    "pressed": "#164569",      # Darker pressed tone
+    "border": "#2c77b8",       # Slightly vivid border
+    "disabled_bg": "#26425d",  # Muted gray-blue
+    "disabled_text": "#a0aab5",
+    "text": "#ffffff"          # White text for readability
     }
+
 
     def __init__(
         self,
