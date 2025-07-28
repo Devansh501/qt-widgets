@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QWidget, QGridLayout, QGraphicsDropShadowEffect,QLabel,QSizePolicy
 from PyQt5.QtCore import Qt, QRectF, QEvent
 from PyQt5.QtGui import QColor, QPainter, QPen, QLinearGradient, QPainterPath
-from widgets.dynamic_button import DynamicButton
+from dynamic_button import DynamicButton
 
 
 class ButtonGridWidget(QWidget):
