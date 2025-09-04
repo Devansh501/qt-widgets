@@ -36,9 +36,19 @@ class BeakerWidget(QWidget):
         self.setStyleSheet("background-color: #1e1e1e;")
 
     def setFillPercent(self, percent: int):
+        """Animate to a new percentage."""
         self._target_percent = max(0, min(100, percent))
         if not self._timer.isActive():
             self._timer.start(10)
+
+    def setFillColorAndAnimate(self, color: QColor):
+        """Change the fill color but keep the current percentage."""
+        self._fill_color = color
+        self._target_percent = self._current_percent  # Keep the same percent
+        self._current_percent = 0
+        if not self._timer.isActive():
+            self._timer.start(10)
+        self.update()
 
     def animate_fill(self):
         if self._current_percent < self._target_percent:
@@ -142,17 +152,25 @@ if __name__ == "__main__":
     layout = QVBoxLayout(window)
 
     beaker = BeakerWidget(
-        fill_color=QColor("#FFAA5C"),  # green
+        fill_color=QColor("#FFAA5C"),
         background_color=QColor("#fff"),
         border_color=QColor("#ccc")
     )
     layout.addWidget(beaker, alignment=Qt.AlignCenter)
 
+    # Button to change fill percentage
     button = QPushButton("Random Fill")
     button.clicked.connect(lambda: beaker.setFillPercent(random.randint(0, 100)))
     layout.addWidget(button, alignment=Qt.AlignCenter)
 
+    # Button to change color but keep current percentage
+    color_button = QPushButton("Change Color (Keep %)")
+    color_button.clicked.connect(lambda: beaker.setFillColorAndAnimate(
+        QColor(random.choice(["#FFAA5C", "#4CAF50", "#3498DB", "#E74C3C", "#9B59B6"]))
+    ))
+    layout.addWidget(color_button, alignment=Qt.AlignCenter)
+
     window.setStyleSheet("background-color: #6BAED6; color: white;")
-    window.setWindowTitle("Beaker With Rounded Bottom")
+    window.setWindowTitle("Beaker Widget - Keep % on Color Change")
     window.show()
     sys.exit(app.exec_())
